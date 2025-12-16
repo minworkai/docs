@@ -16,41 +16,109 @@ This document defines **code ownership, decision rights, and delivery sequencing
 ## Strategy: "Model-First" (Domain Expert owns the "What")
 
 - **Chief Architect (Domain Expert)** defines the **What**: schemas, invariants, business rules, workflow semantics.
-- **Sr. Engineers** build the **How**: execution machinery, IO pipelines, integrations, APIs.
+- **Founding Engineers** own the **How**: execution machinery, IO pipelines, integrations, APIs.
 
 This maximizes speed while ensuring correctness in the most expensive-to-fix layer: **data modeling + workflow meaning**.
 
 ---
 
-## Team Scaling Phases
+## AI-First Development Model
 
-This ownership map adapts as the team grows. We start with founder-only, then progressively delegate.
+We don't hand-code. We **plan, review, and direct AI agents**.
 
-| Phase | Headcount | Ownership Model |
-|-------|-----------|-----------------|
-| **Bootstrap** | David only | David owns all; doc serves as future contract |
-| **First Hire** | David + 1 Sr. Eng | Collapsed map (see below) |
-| **Full Team** | David + 2 Sr. Engs | Full ownership map activated |
+### The Stack
 
-### Bootstrap Phase (Current)
+| Tool | Role |
+|------|------|
+| **Cursor** | Primary coding agent — latest agent mode for implementation |
+| **Claude** | Plan review, architecture validation, complex reasoning |
+| **GitHub Copilot** | Inline suggestions during review (optional) |
 
-David builds the Phase 1 foundation (TenantContext, PermissionService, base executor patterns). This establishes the "trusted patterns" that the first hire will extend rather than architect from scratch.
+### The Workflow: Plan → Review → Implement → Validate
 
-### First Hire Collapse
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. PLAN (Human + AI Agent)                                                │
+│     Engineer writes a plan: what to build, constraints,         │
+│     acceptance criteria, affected files                         │
+├─────────────────────────────────────────────────────────────────┤
+│  2. REVIEW PLAN (Human + Human + AI Agent)                                 │
+│     Peer reviews plan for correctness, scope creep,             │
+│     domain alignment. Architect reviews if domain-touching.     │
+├─────────────────────────────────────────────────────────────────┤
+│  3. IMPLEMENT (AI Agent)                                        │
+│     Cursor agent executes the approved plan.                    │
+│     Engineer monitors, course-corrects, doesn't hand-code.      │
+├─────────────────────────────────────────────────────────────────┤
+│  4. VALIDATE (Human + Gemini Deep think or GPT5.2 Pro Extended)                                            │
+│     Engineer reviews output: tests pass, code matches plan,     │
+│     no regressions. PR opened for final review.                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-When one Sr. Engineer joins, ownership collapses to:
+### Why This Works
 
-| Domain | David | Sr. Engineer |
-|--------|-------|--------------|
-| Business Kernel (`network/`, `insurance/`, `assets/`) | **Primary** | Contributor (follows patterns) |
-| Platform Kernel (`common/`, `access/`, `core/brain/`) | Reviewer | **Primary** |
-| IO Layer (`documents/`, `communication/`, APIs) | Reviewer | **Primary** |
+- **Speed**: What takes a team weeks, we ship in days. What takes days, we ship in hours.
+- **Quality**: Plans are reviewed before a single line is written — catches errors at the cheapest point.
+- **Leverage**: Engineers are multiplied 10x by directing agents instead of typing.
+- **Consistency**: AI follows patterns perfectly once shown; humans drift.
 
-The first hire effectively becomes "Sr. Eng A + B" until headcount grows.
+### Rules for AI-First Development
+
+1. **No hand-coding for new features.** Use Cursor agent mode. Hand-editing only for surgical fixes during review.
+2. **Plans are artifacts.** Store them in `.cursor/plans/` or PR descriptions. They're the source of truth.
+3. **Context is king.** Feed the agent the right files, specs, and examples. Bad context = bad output.
+4. **Review the output, not the process.** Don't watch the agent type. Review the diff.
+5. **If the agent struggles 3x, stop.** Rewrite the plan or break the task smaller.
 
 ---
 
-## Ownership Map (Full Team)
+## Team Scaling Phases
+
+This ownership map adapts as the team grows.
+
+| Phase | Headcount | Ownership Model | Timeline |
+|-------|-----------|-----------------|----------|
+| **Bootstrap** | David only | David owns all; doc serves as future contract | Current |
+| **Founding Team** | David + 2 Founding Engs | Full founding ownership map | Day 1 ready |
+| **Post-Foundation** | Founding Team + N | Vertical engineers spin up new OS apps | After Phase 3 |
+
+### Bootstrap Phase (Current)
+
+David builds the Phase 1 foundation (TenantContext, PermissionService, base executor patterns). This establishes the "trusted patterns" that founding engineers will extend rather than architect from scratch.
+
+### Founding Team Phase
+
+When the two founding engineers join, ownership splits:
+
+| Domain | David (Architect) | Founding Eng A (Platform) | Founding Eng B (Integrator) |
+|--------|-------------------|---------------------------|----------------------------|
+| Business Kernel (`network/`, `insurance/`, `assets/`) | **Primary** | Contributor | Contributor |
+| Platform Kernel (`common/`, `access/`, `core/brain/`) | Reviewer | **Primary** | Contributor |
+| IO Layer (`documents/`, `communication/`, APIs) | Reviewer | Contributor | **Primary** |
+
+The founding team's mission: **build the platform that makes spinning up new verticals trivial.**
+
+### Post-Foundation: Vertical Engineers
+
+Once the founding team has delivered the core platform (Phases 1-3 complete), we add **Vertical Engineers** who can independently build new OS apps:
+
+**What Vertical Engineers Own:**
+- Their entire `apps/{vertical}_os/` directory (models, views, workflows, templates)
+- Vertical-specific Brain tools registered under their namespace (e.g., `fleet.*`)
+- Vertical-specific Temporal workflows and Celery tasks
+
+**What Vertical Engineers Do NOT Touch (without founding team review):**
+- Core domains (`network/`, `insurance/`, `assets/`)
+- Platform kernel (`common/`, `access/`, `core/brain/`)
+- Shared integrations (`documents/`, `communication/`)
+
+**The Contract:**
+Vertical Engineers build on top of the platform. They consume `Entity`, `Tenant`, `PermissionService`, and `BrainWorkflowPlan` — they don't modify them. If they need a new core capability, they request it from the founding team.
+
+---
+
+## Ownership Map (Founding Team)
 
 ### Shared Decision Rights
 
@@ -63,23 +131,23 @@ The first hire effectively becomes "Sr. Eng A + B" until headcount grows.
 - `network/` (Entity, Identifier normalization, merge/claim semantics)
 - `insurance/` (Policy/Term/Coverage/Submission semantics)
 - `assets/` (Driver/Vehicle domain rules, PII constraints)
-- `apps/*/models/` where business semantics live (e.g., `apps/agency_os/models/`)
+- `apps/*/models/` where business semantics live
 
 **Also owns**:
 - Workflow semantics and plan intent mapping (Loss Run, Quote Submission, Renewal, etc.)
 - "What must be true" invariants: uniqueness constraints, canonicalization rules, lifecycle states
 
-**Approval required**:
-- Any schema change in the above domains
-- Any change that alters business meaning (e.g., what "Submission" grants, what "Claimed" means)
+**Plan approval required**:
+- Any plan that changes domain schemas/rules
+- Any plan that alters business meaning (e.g., what "Submission" grants, what "Claimed" means)
 
-**Trusted Patterns (No Approval Needed)**:
-- Adding a nullable field to an existing model that follows established naming conventions
+**Trusted Patterns (No Plan Review Needed)**:
+- Adding a nullable field following established naming conventions
 - Adding a new `@property` or helper method that doesn't change persistence
 - Adding indexes for query performance
-- Extending enum choices where the pattern is established (e.g., adding a new `DocumentType`)
+- Extending enum choices where the pattern is established
 
-### Sr. Engineer A (Platform) — Execution & Security Kernel Owner
+### Founding Engineer A (Platform) — Execution & Security Kernel Owner
 
 **Primary owner**:
 - `common/` (BaseModel patterns, ContextVars, scoped managers)
@@ -91,28 +159,28 @@ The first hire effectively becomes "Sr. Eng A + B" until headcount grows.
 - Tenant isolation correctness (TenantContext in workers + brain execution)
 - Observability (trace_id propagation), PII-safe logs
 
-**Approval required**:
-- Any changes under `common/`, `access/`, `core/brain/`
+**Plan approval required**:
+- Any plan touching `common/`, `access/`, `core/brain/`
 
-**Trusted Patterns (No Approval Needed)**:
+**Trusted Patterns (No Plan Review Needed)**:
 - Adding new log statements (if PII-safe)
 - Adding new metrics/traces that follow existing conventions
 - Bug fixes that don't change executor state machine semantics
 
-### Sr. Engineer B (Integrator) — IO, Integrations, API Surface Owner
+### Founding Engineer B (Integrator) — IO, Integrations, API Surface Owner
 
 **Primary owner**:
 - `documents/` (S3 storage, classification/extraction pipeline, linking tables)
 - `communication/` (email/sms/voice gateways)
 - External integrations (Gmail/Resend/RingCentral/Stripe/portals)
-- REST APIs + serializers + views for consuming the domains cleanly
+- REST APIs + serializers + views
 
 **Accountable for**:
 - Reliable ingestion (email/PDF → Document → links → events)
 - Integration idempotency and retry safety
 - Clean API contracts that respect ACL and tenancy
 
-**Trusted Patterns (No Approval Needed)**:
+**Trusted Patterns (No Plan Review Needed)**:
 - Adding new API endpoints that follow established serializer patterns
 - Adding retry/backoff logic to existing integrations
 - Adding new webhook handlers that follow existing patterns
@@ -121,37 +189,41 @@ The first hire effectively becomes "Sr. Eng A + B" until headcount grows.
 
 ## Collaboration Rules (Non-Negotiable)
 
-### PR Review Rules
+### Plan Review Rules
 
-**Architect must approve** any PR that:
-- Changes domain schemas/rules in `network/`, `insurance/`, `assets/`, `apps/*/models/`
-- Changes anything that affects "business truth" (policy ownership, grants, claiming)
+**Before AI implements**, plans must be reviewed:
 
-**Platform owner must approve** any PR that:
-- Touches `common/`, `access/`, `core/brain/`
-- Alters executor semantics (dynamic step injection, idempotency, status transitions)
+| Plan Type | Reviewer Required | Turnaround |
+|-----------|-------------------|------------|
+| Domain schema / business logic | Architect | < 2 hours |
+| Platform kernel changes | Platform Owner | < 2 hours |
+| IO / API changes | Integrator Owner | < 2 hours |
+| Trusted pattern changes | None — self-review | Immediate |
+| Golden Rule / PII / Tenant isolation | Architect (explicit approval) | No timeout |
 
-**Integrator owner must approve** any PR that:
-- Touches `documents/`, `communication/`, external gateways, or public API surfaces
+**Async Review Protocol:**
+- Post plan in Slack or PR draft
+- Reviewer has 2 hours during work hours
+- No response + tests pass = approved for trusted patterns only
+- Golden Rule changes: must get explicit 👍
 
-### Async Approval Protocol
+### PR Review Rules (Post-Implementation)
 
-To prevent bottlenecks (especially while David is fundraising):
+After AI implements:
 
-| Approval Type | Timeout | Default if No Response |
-|---------------|---------|------------------------|
-| Trusted Pattern changes | None | Auto-merge if tests pass |
-| Standard changes | 24 hours | Approved if tests pass + no objections |
-| Golden Rule / PII / Tenant isolation | No timeout | Must get explicit approval |
-| Schema migrations | No timeout | Must get explicit approval |
-
-**Exception**: During active fundraising sprints, David may designate a "delegate reviewer" for standard domain changes.
+| PR Type | Reviewer | Focus |
+|---------|----------|-------|
+| Any PR | Plan author | Output matches plan intent |
+| Domain-touching | Architect | Business correctness |
+| Platform-touching | Platform Owner | Isolation, determinism |
+| API-touching | Integrator Owner | Contract stability |
 
 ### "Contracts Before Code"
 
 Before implementing a cross-domain feature:
 - Write a **1-page contract**: inputs, outputs, required IDs, tenant context assumptions.
 - Confirm **which model is the source of truth** (Entity vs Tenant vs Policy vs Submission).
+- Get plan approved, then unleash the agent.
 
 ### "No Hidden Tenancy"
 
@@ -167,11 +239,12 @@ Before implementing a cross-domain feature:
 
 ## Delivery Sequencing (3 Phases)
 
-Designed to unblock parallel work while keeping foundational correctness first.
+Compressed timelines. What normally takes teams months, we ship in weeks.
 
 ### Phase 1 — Security + Tenancy Foundation
 
-**Owner:** David (bootstrap), then Sr. Eng A (Platform) extends. Architect reviews.
+**Owner:** David (bootstrap), then Founding Eng A (Platform) extends.
+**Timeline:** 2-3 days with founding team
 
 **Deliverable (Definition of Done)**:
 - `TenantContext` exists and is required for scoped queries.
@@ -179,11 +252,12 @@ Designed to unblock parallel work while keeping foundational correctness first.
 - A "hello world" worker and brain tool can run inside tenant context.
 - Trusted patterns documented for Phase 2 contributors.
 
-**Hiring Gate**: Phase 1 core must be complete before first engineer starts. They extend, not architect.
+**Founding Gate**: Phase 1 core complete before founding engineers start. They extend, not architect.
 
 ### Phase 2 — Domain Models + Ingestion Primitives
 
-**Owner:** Architect (domain models), Sr. Eng B (documents ingestion), Sr. Eng A supports.
+**Owner:** Architect (domain models), Founding Eng B (documents ingestion), Founding Eng A supports.
+**Timeline:** 3-5 days
 
 **Deliverable**:
 - Canonical `network.Entity` + `EntityIdentifier` normalization implemented.
@@ -192,12 +266,15 @@ Designed to unblock parallel work while keeping foundational correctness first.
 
 ### Phase 3 — Brain Workflows + Marketplace
 
-**Owner:** Architect defines workflow semantics + plan steps; Sr. Eng A implements executor; Sr. Eng B wires IO triggers.
+**Owner:** Architect defines workflow semantics + plan steps; Founding Eng A implements executor; Founding Eng B wires IO triggers.
+**Timeline:** 5-7 days
 
 **Deliverable**:
 - Loss Run workflow runs end-to-end with deterministic executor rules (including **step insertion**, not append).
 - Marketplace gating exists (tenant subscriptions → allowed plans/capabilities).
 - Human-in-the-loop flows supported (`NEEDS_REVIEW` status, clear remediation path).
+
+**Total: ~2 weeks to full platform with founding team.**
 
 ---
 
@@ -223,42 +300,59 @@ When the Brain executor crashes mid-workflow:
    - If step was idempotent: re-run from crashed step.
    - If step had side effects (email sent, external API called): check idempotency key, decide skip vs retry.
    - If unclear: set status to `NEEDS_REVIEW`, alert Architect.
-4. **Post-mortem**: Platform Owner documents root cause within 48 hours.
+4. **Post-mortem**: Platform Owner documents root cause within 24 hours.
 
 ### Decision Deadlock Resolution
 
 If Architect and Platform Owner disagree on whether something is "domain" vs "platform":
 
-1. Both write a 1-paragraph position (async, in PR comments).
-2. If still unresolved after 24 hours: **Architect decides** (domain correctness > platform elegance).
-3. Dissenting opinion logged in ADR (Architecture Decision Record) for future reference.
+1. Both write a 1-paragraph position (async, in Slack or PR comments).
+2. If still unresolved after 4 hours: **Architect decides** (domain correctness > platform elegance).
+3. Dissenting opinion logged in ADR for future reference.
 
 ---
 
-## Onboarding Protocol (First Hire)
+## Onboarding Protocol
 
-### Week 1: Shadow & Absorb
+### Founding Engineers (Day 1-3)
 
-- Day 1-2: Read this doc + `ARCHITECTURE.md` + Brain spec. Ask questions async in dedicated Slack channel.
-- Day 3-4: Shadow David on one domain task (e.g., reviewing a model change) and one platform task (e.g., debugging TenantContext).
-- Day 5: Ship a "hello world" PR that touches Platform layer (add a log line, new test, etc.). Get review feedback.
+**Day 1: Absorb & Setup**
+- Morning: Read this doc + `ARCHITECTURE.md` + Brain spec.
+- Afternoon: Set up Cursor, clone repo, run local environment.
+- End of day: Post 3 questions in Slack. David answers async.
 
-### Week 2: Take Ownership
+**Day 2: First Plan**
+- Write your first plan for a small task in your layer (Platform or IO).
+- Get plan reviewed by David (< 2 hours).
+- Execute plan with Cursor agent. Ship PR by EOD.
 
-- Take primary ownership of Platform Kernel (`common/`, `access/`, `core/brain/`).
-- David shifts to reviewer role for Platform; remains primary on Business Kernel.
-- First real deliverable: extend executor with one new capability (e.g., step timeout handling).
+**Day 3+: Full Velocity**
+- Own your layer end-to-end.
+- Daily async standup (Slack): what you shipped, what you're planning, blockers.
+- Weekly 30-min founding team sync: coordinate cross-layer work.
 
-### Week 3+: Full Velocity
+### Vertical Engineers (Post-Foundation)
 
-- Engineer owns Platform + IO layers (collapsed Sr. Eng A+B role).
-- Weekly 30-min sync with David: review open PRs, surface domain questions, adjust ownership boundaries as needed.
+**Day 1: Platform Orientation**
+- Read `ARCHITECTURE.md` + this doc (focus on "Vertical Engineer" section).
+- Review one existing `apps/*_os/` as a reference pattern.
+- Scope call with founding team: define your vertical's MVP.
+
+**Day 2: Build**
+- Scaffold your `apps/{vertical}_os/` directory.
+- Write plan for first feature. Get reviewed by any founding team member.
+- Execute with Cursor. Ship PR.
+
+**Day 3+: Independent Execution**
+- Own your vertical end-to-end.
+- Only escalate when you need a new core capability.
+- Weekly demo to founding team to stay aligned.
 
 ---
 
 ## References
 
-- Architecture spec: `mw-dj6-v2/ARCHITECTURE.md` (renamed from `fromscratch.md`)
+- Architecture spec: `mw-dj6-v2/ARCHITECTURE.md`
 - Brain rewrite spec: `.cursor/plans/masterplan/aibrain/nuke.md`
 - Loss Run workflow narrative: `.cursor/plans/masterplan/aibrain/lossrun.md`
 
@@ -269,4 +363,6 @@ If Architect and Platform Owner disagree on whether something is "domain" vs "pl
 | Version | Date | Changes |
 |---------|------|---------|
 | 4.2.0 | Initial | Original ownership map |
-| 4.2.1 | — | Added team scaling phases, trusted patterns, async approval protocol, failure modes, onboarding protocol, deadlock resolution |
+| 4.2.1 | — | Added team scaling phases, trusted patterns, async approval protocol, failure modes, onboarding protocol |
+| 4.2.2 | — | Changed "hires" to "founding engineers"; added vertical engineer scaling model |
+| 4.2.3 | — | Added AI-first development model (Cursor agent workflow); compressed all timelines (weeks → days); updated onboarding to Day 1-3 |
